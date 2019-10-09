@@ -1,0 +1,16 @@
+
+
+CHIP Neg16 {
+    IN  
+        in[16];  // 16-bit inputs        
+
+
+
+    OUT 
+        out[16];
+
+    PARTS:
+   // Put you code here:
+   Not16 (in[0..15]=in, out[0..15]=notin);
+   Inc16 (in[0..15]=notin, out[0..15]=out);
+}

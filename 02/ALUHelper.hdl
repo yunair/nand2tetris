@@ -1,0 +1,22 @@
+//  operates on the resulting values, as follows:
+// if (zx == 1) set x = 0        // 16-bit constant
+// if (nx == 1) set x = !x       // bitwise not
+
+CHIP ALUHelper {
+    IN  
+        x[16],  // 16-bit inputs        
+        zx, // zero the x input?
+        nx; // negate the x input?
+
+
+    OUT 
+        out[16];
+
+    PARTS:
+   // Put you code here:
+   // zx
+   Mux16 (a=x, b=false, sel=zx, out=zxx); 
+   // nx
+   Not16 (in=zxx, out=nzxx);
+   Mux16 (a=zxx, b=nzxx, sel=nx, out=out); 
+}

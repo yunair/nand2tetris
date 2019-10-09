@@ -1,0 +1,98 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/05/CPU.hdl
+
+/**
+ * The Hack CPU (Central Processing unit), consisting of an ALU,
+ * two registers named A and D, and a program counter named PC.
+ * The CPU is designed to fetch and execute instructions written in 
+ * the Hack machine language. In particular, functions as follows:
+ * Executes the inputted instruction according to the Hack machine 
+ * language specification. The D and A in the language specification
+ * refer to CPU-resident registers, while M refers to the external
+ * memory location addressed by A, i.e. to Memory[A]. The inM input 
+ * holds the value of this location. If the current instruction needs 
+ * to write a value to M, the value is placed in outM, the address 
+ * of the target location is placed in the addressM output, and the 
+ * writeM control bit is asserted. (When writeM==0, any value may 
+ * appear in outM). The outM and writeM outputs are combinational: 
+ * they are affected instantaneously by the execution of the current 
+ * instruction. The addressM and pc outputs are clocked: although they 
+ * are affected by the execution of the current instruction, they commit 
+ * to their new values only in the next time step. If reset==1 then the 
+ * CPU jumps to address 0 (i.e. pc is set to 0 in next time step) rather 
+ * than to the address resulting from executing the current instruction. 
+ */
+
+CHIP CPU {
+
+    IN  inM[16],         // M value input  (M = contents of RAM[A])
+        instruction[16], // Instruction for execution
+        reset;           // Signals whether to re-start the current
+                         // program (reset==1) or continue executing
+                         // the current program (reset==0).
+
+    OUT outM[16],        // M value output
+        writeM,          // Write to M? 
+        addressM[15],    // Address in data memory (of M)
+        pc[15];          // address of next instruction
+
+    PARTS:
+    // Put your code here:
+    // 解码，instruction[15]为0是A指令，1是C指令
+    DMux(in=true, sel=instruction[15], a=insA, b=insC);
+    // 若为A指令，则存外部传入的instruction，否则使用上次ALU output
+    Mux16(a=instruction, b=outALU, sel=insC, out=INA);
+    // C指令ixxaccccccdddjjj
+    //  In case of a C-instruction, the a- and c-bits code the comp part of theinstruction, 
+    // while the d- and j-bits code the dest and jump parts of the instruction
+
+    // The three d-bits are used to determine which registers should “accept” the ALU resulting output
+    // C指令是用上次的ALU值， A指令直接使用输入的instruction值
+    And (a=instruction[5], b=insC, out=AusePreALUValue);
+    Or (a=AusePreALUValue, b=insA, out=isLoadA);
+    ARegister(in=INA, load=isLoadA, out=outA, out[0..14]=addressM);
+
+    // 如果是C指令并且规定写入到D
+    And (a=instruction[4], b=insC, out=DusePreALUValue);
+    DRegister(in=outALU, load=DusePreALUValue, out=outD);
+    // 如果是C指令并且规定写入到M
+    And (a=instruction[3], b=insC, out=writeM);
+
+    //  the single a-bit determines whether the ALU will operate on the A register input or on the M input
+    And(a=instruction[12], b=insC, out=chooseAorM);
+    Mux16(a=outA, b=inM, sel=chooseAorM, out=ALUY);
+
+    // six c-bits determine which function the ALU will compute
+    And (a=instruction[11], b=insC, out=zx);
+    And (a=instruction[10], b=insC, out=nx);
+    And (a=instruction[9], b=insC, out=zy);
+    And (a=instruction[8], b=insC, out=ny);
+    And (a=instruction[7], b=insC, out=f);
+    And (a=instruction[6], b=insC, out=no);
+
+    ALU(x=outD, y=ALUY,zx=zx, nx=nx, zy=zy, ny=ny, f=f, no=no, out=outALU, out=outM, zr=EQZero, ng=LTZero);
+
+     // PC 
+
+    // d the three j-bits are used to for branching control
+    //  the question of weather or not a jump should be realized is answered by two signals: 
+    // (i) the j-bits of the current instruction, specifying the jump condition
+    // (ii) the ALU output-bits zr and ng, which can be used to determine if the specified condition is satisfied, or not.
+    And (a=instruction[0], b=insC, out=j3);
+    And (a=instruction[1], b=insC, out=j2);
+    And (a=instruction[2], b=insC, out=j1);
+
+    Or (a=LTZero, b=EQZero, out=LEZero);
+    Not (in=LEZero, out=GTZero);
+
+    And (a=j3, b=GTZero, out=isGTJump);
+    And (a=j2, b=EQZero, out=isEQJump);
+    And (a=j1, b=LTZero, out=isLTJump);
+
+    Or (a=isGTJump, b=isEQJump, out=isGEJump);
+    Or (a=isGEJump, b=isLTJump, out=isJump);
+
+    PC(in=outA, load=isJump, reset=reset, inc=true, out[0..14]=pc);
+}
